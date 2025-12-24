@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间看得见 - MVP版</title>
+    <style>
+        /* --- 1. 基础样式与变量 --- */
+        :root {
+            --primary: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-light: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --border-radius: 16px;
+            --nav-height: 70px;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            --shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px 20px calc(var(--nav-height) + 20px) 20px;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3 { margin: 0 0 12px 0; font-weight: 700; letter-spacing: -0.5px; }
+        h1 { font-size: 1.8rem; color: var(--text-main); margin-bottom: 20px; }
+        h3 { font-size: 1.1rem; color: var(--text-main); }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 18px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        button:active { transform: scale(0.98); }
+
+        /* --- 2. 页面切换逻辑 --- */
+        .page { display: none; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- 3. 页面1组件样式 --- */
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .dashboard-card {
+            text-align: center;
+            padding: 24px 20px;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+        }
+
+        .net-value { 
+            font-size: 3.2em; 
+            font-weight: 800; 
+            margin: 12px 0; 
+            letter-spacing: -1px;
+            transition: all 0.3s ease;
+            padding: 8px 16px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        
+        .net-value.positive { color: var(--success); background: rgba(16, 185, 129, 0.1); }
+        .net-value.negative { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+        
+        .breakdown { 
+            display: flex; 
+            justify-content: space-around; 
+            margin-top: 15px; 
+            font-size: 0.95em; 
+            color: var(--text-light); 
+            background: rgba(255,255,255,0.6);
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .quick-log-section {
+            min-height: 180px; 
+            position: relative; 
+            overflow: hidden;
+        }
+
+        .quick-log-view { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100%; 
+            transition: all 0.3s ease; 
+            padding: 10px;
+        }
+
+        #sliderView { opacity: 1; pointer-events: auto; }
+        #tagView { 
+            opacity: 0; 
+            pointer-events: none; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: var(--card-bg); 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+
+        .quick-log-section.editing #sliderView { opacity: 0; pointer-events: none; }
+        .quick-log-section.editing #tagView { opacity: 1; pointer-events: auto; }
+
+        .slider-container { 
+            width: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 12px; 
+            padding: 10px 0;
+        }
+
+        .slider-hint { 
+            color: var(--text-light); 
+            font-size: 0.9em; 
+            background: #fff7ed;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+            color: var(--warning);
+        }
+
+        .slider-time-display { 
+            font-size: 2.8em; 
+            font-weight: 800; 
+            color: var(--danger); 
+            height: 55px; 
+            transition: transform 0.1s;
+            text-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+        }
+
+        input[type="range"] { 
+            width: 100%; 
+            height: 10px; 
+            background: #e2e8f0; 
+            border-radius: 5px; 
+            appearance: none; 
+            outline: none; 
+            cursor: grab; 
+            transition: background 0.2s;
+        }
+
+        input[type="range"]:active { cursor: grabbing; background: #cbd5e1; }
+        
+        input[type="range"]::-webkit-slider-thumb { 
+            appearance: none; 
+            width: 28px; 
+            height: 28px; 
+            background: var(--danger); 
+            border-radius: 50%; 
+            cursor: grab; 
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+            transition: transform 0.2s, background 0.2s;
+            border: 2px solid white;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); background: #dc2626; }
+
+        .tag-view-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 15px; 
+            background: #fef2f2;
+            padding: 10px 15px;
+            border-radius: 10px;
+            border: 1px solid #fee2e2;
+        }
+
+        .selected-duration { 
+            font-weight: bold; 
+            color: var(--danger); 
+            font-size: 1.1em;
+        }
+
+        .tag-input-group { 
+            display: flex; 
+            gap: 10px; 
+            flex-grow: 1; 
+            margin-bottom: 15px;
+        }
+
+        .tag-input-group input { 
+            flex-grow: 1; 
+            padding: 14px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 10px; 
+            font-size: 1em; 
+            transition: border-color 0.2s;
+        }
+
+        .tag-input-group input:focus { 
+            border-color: var(--danger); 
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+        }
+
+        .tag-actions { 
+            display: flex; 
+            gap: 12px; 
+            margin-top: 10px; 
+        }
+
+        .btn-record { 
+            background-color: var(--danger); 
+            color: white; 
+            flex-grow: 1; 
+            padding: 14px; 
+            font-size: 1.05em;
+            box-shadow: 0 4px 6px rgba(239, 68, 68, 0.25);
+        }
+
+        .btn-record:hover { background-color: #dc2626; box-shadow: 0 6px 10px rgba(239, 68, 68, 0.3); }
+
+        .btn-back { 
+            background-color: #e2e8f0; 
+            color: var(--text-main); 
+            padding: 14px 18px;
+        }
+
+        .btn-back:hover { background-color: #cbd5e1; }
+
+        .timer-section { 
+            text-align: center; 
+            position: relative; 
+        }
+
+        .timer-display { 
+            font-size: 5em; 
+            font-weight: 800; 
+            font-variant-numeric: tabular-nums; 
+            margin: 20px 0; 
+            color: var(--primary); 
+            cursor: pointer; 
+            user-select: none; 
+            transition: all 0.2s;
+            letter-spacing: -2px;
+            text-shadow: 0 2px 10px rgba(37, 99, 235, 0.15);
+        }
+
+        .timer-display:hover { 
+            background-color: #eff6ff; 
+            border-radius: 12px; 
+            transform: scale(1.02);
+        }
+
+        .tag-input-wrapper { 
+            position: relative; 
+            width: 100%; 
+            margin-bottom: 12px;
+        }
+
+        #tagInput { 
+            width: 100%; 
+            padding: 14px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 10px; 
+            font-size: 1em; 
+            box-sizing: border-box; 
+            transition: border-color 0.2s;
+        }
+
+        #tagInput:focus { 
+            border-color: var(--primary); 
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        #tagSuggestions { 
+            position: absolute; 
+            top: 100%; 
+            left: 0; 
+            right: 0; 
+            background: white; 
+            border: 1px solid #e2e8f0; 
+            border-top: none; 
+            border-radius: 0 0 10px 10px; 
+            max-height: 150px; 
+            overflow-y: auto; 
+            z-index: 10; 
+            display: none; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+        }
+
+        .suggestion-item { 
+            padding: 12px 15px; 
+            cursor: pointer; 
+            text-align: left; 
+            border-bottom: 1px solid #f1f5f9; 
+            transition: background 0.2s;
+        }
+
+        .suggestion-item:hover { 
+            background-color: #f8fafc; 
+            color: var(--primary); 
+            padding-left: 18px;
+        }
+
+        .timer-controls { 
+            margin-top: 15px; 
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .timer-controls button { 
+            padding: 14px 28px; 
+            font-size: 1.1em; 
+            min-width: 120px;
+        }
+
+        .btn-start { 
+            background-color: var(--success); 
+            color: white; 
+            box-shadow: 0 4px 8px rgba(16, 185, 129, 0.25);
+        }
+
+        .btn-start:hover { 
+            background-color: #059669; 
+            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-stop { 
+            background-color: var(--danger); 
+            color: white; 
+            box-shadow: 0 4px 8px rgba(239, 68, 68, 0.25);
+        }
+
+        .btn-stop:hover { 
+            background-color: #dc2626; 
+            box-shadow: 0 6px 12px rgba(239, 68, 68, 0.35);
+        }
+
+        /* --- 4. 页面2组件样式 --- */
+        .chart-section {
+            text-align: center;
+            padding-bottom: 15px;
+        }
+
+        .donut-chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        .donut-chart {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            position: relative;
+            margin-bottom: 15px;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            background: #f1f5f9; /* 默认空状态颜色 */
+        }
+
+        .donut-chart:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-hover);
+        }
+
+        /* 圆环中间的白色遮罩 */
+        .donut-chart::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px; height: 120px;
+            background: var(--card-bg);
+            border-radius: 50%;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .chart-center-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--text-main);
+            z-index: 2;
+            white-space: nowrap;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .chart-center-text small {
+            display: block;
+            font-size: 0.7em;
+            font-weight: normal;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+            width: 100%;
+            padding: 0 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.85em;
+            color: var(--text-light);
+            background: #f8fafc;
+            padding: 6px 10px;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+
+        .legend-item:hover {
+            background: white;
+            border-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* --- 本周概览展开功能样式 --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            text-align: center;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        .stat-item { 
+            padding: 12px; 
+            border-radius: 10px; 
+            transition: all 0.2s; 
+            cursor: pointer; 
+            background: #f8fafc;
+            border: 2px solid transparent;
+        }
+
+        .stat-item:hover { 
+            background: #ffffff; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+
+        .stat-item.active { 
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+        }
+
+        .stat-item .label { 
+            font-size: 0.85em; 
+            color: var(--text-light); 
+            display: block; 
+            margin-bottom: 4px; 
+            font-weight: 500;
+        }
+
+        .stat-item .value { 
+            font-size: 1.6em; 
+            font-weight: 800; 
+            letter-spacing: -0.5px; 
+            transition: all 0.2s;
+        }
+
+        .stat-item.invest .value { color: var(--success); }
+        .stat-item.debt .value { color: var(--danger); }
+        .stat-item.net .value { color: var(--primary); }
+
+        .stat-item.invest.active .value { color: #059669; text-shadow: 0 2px 4px rgba(16, 185, 129, 0.2); }
+        .stat-item.debt.active .value { color: #dc2626; text-shadow: 0 2px 4px rgba(239, 68, 68, 0.2); }
+        .stat-item.net.active .value { color: #1d4ed8; text-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
+
+        /* 详细记录展开容器 */
+        .detail-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out, opacity 0.3s ease;
+            opacity: 0;
+            margin-top: 0;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .detail-container.expanded {
+            max-height: 600px;
+            opacity: 1;
+            margin-top: 15px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .detail-title {
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 1em;
+        }
+
+        .detail-close {
+            background: none;
+            color: var(--text-light);
+            padding: 4px 8px;
+            font-size: 1.2em;
+            border-radius: 6px;
+        }
+
+        .detail-close:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
+        }
+
+        .detail-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 8px;
+            border-bottom: 1px dashed #e2e8f0;
+            animation: slideIn 0.3s ease forwards;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .detail-item-tag {
+            font-weight: 600;
+            color: var(--text-main);
+            font-size: 0.95em;
+        }
+
+        .detail-item-time {
+            font-size: 0.8em;
+            color: var(--text-light);
+        }
+
+        .detail-item-value {
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+
+        .detail-item.invest .detail-item-value { color: var(--success); }
+        .detail-item.debt .detail-item-value { color: var(--danger); }
+
+        /* 本周历史详情列表样式（复用） */
+        .history-list { list-style: none; padding: 0; margin-top: 10px; }
+        .history-item {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid var(--primary);
+            box-shadow: var(--shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+            animation: slideIn 0.3s ease forwards;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .history-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .history-item.invest { border-left-color: var(--success); }
+        .history-item.debt { border-left-color: var(--danger); }
+        
+        .item-meta { display: flex; flex-direction: column; font-size: 0.9em; }
+        .item-tag { font-weight: 700; margin-bottom: 2px; color: var(--text-main); }
+        .item-time { color: var(--text-light); font-size: 0.85em; }
+        .item-value { font-weight: 800; font-size: 1.25em; min-width: 70px; text-align: right; }
+
+        /* 空状态提示 */
+        .empty-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-light);
+            background: #f8fafc;
+            border-radius: var(--border-radius);
+            border: 2px dashed #e2e8f0;
+            margin-top: 15px;
+        }
+
+        .empty-state-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            opacity: 0.7;
+        }
+
+        /* --- 5. 底部导航栏 --- */
+        .bottom-nav {
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            max-width: 600px; 
+            height: var(--nav-height);
+            background: var(--card-bg); 
+            border-top: 1px solid #e2e8f0; 
+            display: flex; 
+            z-index: 100; 
+            margin: 0 auto;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
+            padding: 0 10px;
+        }
+
+        .nav-item {
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 0.85em; 
+            color: var(--text-light); 
+            background: none; 
+            border-radius: 12px; 
+            gap: 4px;
+            transition: all 0.2s;
+            margin: 8px 4px;
+            position: relative;
+        }
+
+        .nav-item:hover {
+            background-color: #f1f5f9;
+        }
+
+        .nav-item.active { 
+            color: var(--primary); 
+            font-weight: 700; 
+            background-color: #eff6ff; 
+        }
+
+        .nav-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 15%;
+            width: 70%;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px 3px 0 0;
+        }
+
+        .nav-icon { 
+            font-size: 1.4em; 
+            transition: transform 0.2s;
+        }
+
+        .nav-item:active .nav-icon {
+            transform: scale(1.1);
+        }
+
+        /* --- 6. 时间设置模态框 --- */
+        #timeModal { 
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.5); 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 200; 
+            backdrop-filter: blur(2px);
+        }
+
+        .time-modal-content { 
+            background: white; 
+            padding: 30px; 
+            border-radius: var(--border-radius); 
+            width: 85%; 
+            max-width: 340px; 
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .time-inputs { 
+            display: flex; 
+            justify-content: center; 
+            gap: 10px; 
+            margin: 25px 0; 
+            font-size: 2em; 
+        }
+
+        .time-inputs input { 
+            width: 85px; 
+            padding: 12px; 
+            text-align: center; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 10px; 
+            font-size: 1.2em; 
+            font-weight: 600;
+            transition: border-color 0.2s;
+        }
+
+        .time-inputs input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        .time-inputs span { 
+            align-self: center; 
+            color: var(--text-light); 
+            font-weight: 500;
+        }
+
+        .time-modal-actions { 
+            display: flex; 
+            gap: 10px; 
+            justify-content: center; 
+        }
+
+        .btn-modal { 
+            background: #e2e8f0; 
+            color: var(--text-main); 
+            padding: 12px 20px; 
+            flex: 1;
+            font-weight: 600;
+        }
+
+        .btn-modal:hover { background: #cbd5e1; }
+
+        .btn-modal-primary { 
+            background: var(--primary); 
+            color: white; 
+            padding: 12px 20px; 
+            flex: 1;
+            font-weight: 600;
+            box-shadow: 0 4px 8px rgba(37, 99, 235, 0.25);
+        }
+
+        .btn-modal-primary:hover { 
+            background: #1d4ed8; 
+            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        /* --- 7. 投资结束提示样式 (NEW) --- */
+        #completionModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+            backdrop-filter: blur(3px);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .completion-modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            width: 85%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 3px solid var(--success);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .completion-modal-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--success), #059669);
+            animation: progressBar 3s linear;
+        }
+
+        @keyframes progressBar {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+
+        .completion-icon {
+            font-size: 4em;
+            margin-bottom: 10px;
+            animation: bounce 0.6s ease;
+            color: var(--success);
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+
+        .completion-title {
+            font-size: 1.5em;
+            font-weight: 800;
+            color: var(--success);
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+
+        .completion-message {
+            color: var(--text-main);
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            line-height: 1.5;
+        }
+
+        .completion-details {
+            background: #f0fdf4;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            color: var(--text-main);
+            border: 1px solid #bbf7d0;
+        }
+
+        .completion-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: var(--success);
+            color: white;
+            padding: 12px 24px;
+            font-weight: 600;
+            flex: 1;
+            box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: #059669;
+            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: var(--text-main);
+            padding: 12px 24px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        /* 通知授权提示 */
+        .notification-prompt {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            text-align: left;
+        }
+
+        .notification-prompt button {
+            background: #f97316;
+            color: white;
+            padding: 8px 12px;
+            margin-top: 8px;
+            font-size: 0.85em;
+            width: 100%;
+        }
+
+        .notification-prompt button:hover {
+            background: #ea580c;
+        }
+
+        /* 标题闪烁动画 */
+        @keyframes titleFlash {
+            0%, 100% { color: var(--text-main); }
+            50% { color: var(--success); }
+        }
+
+        body.title-flashing {
+            animation: titleFlash 0.8s ease infinite;
+        }
+
+        /* 动画效果 */
+        .pulse {
+            animation: pulse 0.5s ease;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .shake {
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 400px) {
+            .timer-display { font-size: 4em; }
+            .net-value { font-size: 2.5em; }
+            .time-inputs input { width: 70px; padding: 10px; }
+            .btn-record, .btn-back { padding: 12px; }
+            .stat-item { padding: 10px; }
+            .stat-item .value { font-size: 1.4em; }
+            .completion-modal-content { padding: 20px; width: 90%; }
+            .completion-icon { font-size: 3em; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 页面1: 核心操作 -->
+    <div id="page1" class="page active">
+        <h1>时间看得见</h1>
+        
+        <!-- 今日净值卡片 -->
+        <div class="card dashboard-card">
+            <h3>今日时间净值</h3>
+            <div id="netValueDisplay" class="net-value positive">+0.0h</div>
+            <div class="breakdown">
+                <span>投资: <strong id="investedDisplay" style="color:var(--success)">0.0h</strong></span>
+                <span>负债: <strong id="debtedDisplay" style="color:var(--danger)">0.0h</strong></span>
+            </div>
+        </div>
+
+        <!-- 快速记录负债 -->
+        <div class="card quick-log-section" id="quickLogSection">
+            <div class="quick-log-view" id="sliderView">
+                <div class="slider-container">
+                    <div class="slider-hint">👇 按住滑块，快速记录负债时间</div>
+                    <div class="slider-time-display" id="sliderTimeDisplay">0.00h</div>
+                    <input type="range" id="timeSlider" min="0.25" max="5" step="0.25" value="0.25">
+                </div>
+            </div>
+            <div class="quick-log-view" id="tagView">
+                <div class="tag-view-header">
+                    <span>已选择时长：</span>
+                    <span class="selected-duration" id="selectedDurationDisplay">0.00h</span>
+                </div>
+                <div class="tag-input-group">
+                    <input type="text" id="quickTagInput" placeholder="输入场景标签，如：刷视频、闲聊" />
+                </div>
+                <div class="tag-actions">
+                    <button class="btn-back" id="backToSliderBtn">← 返回修改</button>
+                    <button class="btn-record" id="confirmQuickLogBtn">✓ 确认记录</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 番茄钟计时 -->
+        <div class="card timer-section" id="timerSection">
+            <h3>开始时间投资</h3>
+            <div class="timer-display" id="timerDisplay">25:00</div>
+            <div class="tag-input-wrapper">
+                <input type="text" id="tagInput" placeholder="输入任务标签 (自动推荐)" autocomplete="off" />
+                <div id="tagSuggestions"></div>
+            </div>
+            <div class="timer-controls">
+                <button class="btn-start" id="startBtn">▶ 开始</button>
+                <button class="btn-stop" id="stopBtn" style="display:none;">⏸ 停止</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页面2: 历史与统计 -->
+    <div id="page2" class="page">
+        <h1>历史与分析</h1>
+
+        <!-- 今日投资分布圆环图 -->
+        <div class="card chart-section">
+            <h3>今日投资分布</h3>
+            <div class="donut-chart-container">
+                <div class="donut-chart" id="donutChart">
+                    <span class="chart-center-text" id="chartCenterText">0h<br><small>投资总额</small></span>
+                </div>
+                <div class="chart-legend" id="chartLegend">
+                    <!-- 图例动态生成 -->
+                </div>
+            </div>
+            <div id="noInvestmentMsg" class="empty-state" style="display:none;">
+                <div class="empty-state-icon">📊</div>
+                <div>今日暂无投资记录</div>
+                <small>开始番茄钟，让时间看得见</small>
+            </div>
+        </div>
+
+        <!-- 本周概览卡片 -->
+        <div class="card stats-card">
+            <h3>本周概览</h3>
+            <div class="stats-grid">
+                <div class="stat-item invest" id="weekInvestedBtn">
+                    <span class="label">投资总额</span>
+                    <span class="value" id="weekInvested">0.0h</span>
+                </div>
+                <div class="stat-item debt" id="weekDebtedBtn">
+                    <span class="label">负债总额</span>
+                    <span class="value" id="weekDebted">0.0h</span>
+                </div>
+                <div class="stat-item net" id="weekNetBtn" style="grid-column: 1 / -1;">
+                    <span class="label">本周净值</span>
+                    <span class="value" id="weekNet">0.0h</span>
+                </div>
+            </div>
+
+            <!-- 详细记录展开容器 -->
+            <div class="detail-container" id="detailContainer">
+                <div class="detail-header">
+                    <span class="detail-title" id="detailTitle">详细记录</span>
+                    <button class="detail-close" id="detailCloseBtn">×</button>
+                </div>
+                <ul class="detail-list" id="detailList">
+                    <!-- 动态内容 -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- 今日详情 -->
+        <h3>今日详情</h3>
+        <ul class="history-list" id="page2HistoryList"></ul>
+        <div id="noHistoryMsg" class="empty-state" style="display: none;">
+            <div class="empty-state-icon">📝</div>
+            <div>今日暂无记录</div>
+            <small>快去投资时间吧！</small>
+        </div>
+    </div>
+</div>
+
+<!-- 底部导航栏 -->
+<nav class="bottom-nav">
+    <button class="nav-item active" id="navPage1">
+        <span class="nav-icon">⏱️</span>
+        <span>投资</span>
+    </button>
+    <button class="nav-item" id="navPage2">
+        <span class="nav-icon">📊</span>
+        <span>历史</span>
+    </button>
+</nav>
+
+<!-- 时间设置模态框 -->
+<div id="timeModal">
+    <div class="time-modal-content">
+        <h3>设置投资时长</h3>
+        <div class="time-inputs">
+            <input type="number" id="minInput" value="25" min="0" max="999" /> <span>分</span>
+            <input type="number" id="secInput" value="0" min="0" max="59" /> <span>秒</span>
+        </div>
+        <div class="time-modal-actions">
+            <button class="btn-modal" id="timeModalCancel">取消</button>
+            <button class="btn-modal-primary" id="timeModalConfirm">确定</button>
+        </div>
+    </div>
+</div>
+
+<!-- 投资结束提示模态框 (NEW) -->
+<div id="completionModal">
+    <div class="completion-modal-content">
+        <div class="completion-icon">🎉</div>
+        <div class="completion-title">时间投资完成！</div>
+        <div class="completion-message">恭喜你完成了本次时间投资</div>
+        <div class="completion-details" id="completionDetails">
+            <!-- 动态内容 -->
+        </div>
+        <div class="completion-actions">
+            <button class="btn-primary" id="completionConfirmBtn">太棒了！</button>
+            <button class="btn-secondary" id="completionViewBtn">查看历史</button>
+        </div>
+        
+        <!-- 通知授权提示 -->
+        <div class="notification-prompt" id="notificationPrompt" style="display:none;">
+            <strong>🔔 开启系统通知</strong><br>
+            下次完成时，即使不在当前页面也能收到提醒
+            <button id="enableNotificationBtn">开启通知权限</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 数据层 (Model) ---
+    const STORAGE_KEY = 'time_see_data_v2';
+    let appData = { history: [] };
+
+    // --- 状态管理 ---
+    let timerInterval = null;
+    let remainingSeconds = 25 * 60;
+    let isRunning = false;
+    let quickLogDuration = 0;
+    const recommendedTags = ['学习', '阅读', '编码', '运动', '会议', '写作', '冥想', '规划', '复盘', '工作', '通勤学习', '深度思考'];
+    const chartColors = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#38bdf8', '#2dd4bf'];
+
+    // --- DOM 元素 ---
+    const els = {
+        // 页面切换
+        page1: document.getElementById('page1'),
+        page2: document.getElementById('page2'),
+        navPage1: document.getElementById('navPage1'),
+        navPage2: document.getElementById('navPage2'),
+
+        // 页面1组件
+        netValue: document.getElementById('netValueDisplay'),
+        invested: document.getElementById('investedDisplay'),
+        debted: document.getElementById('debtedDisplay'),
+        quickLogSection: document.getElementById('quickLogSection'),
+        sliderView: document.getElementById('sliderView'),
+        tagView: document.getElementById('tagView'),
+        timeSlider: document.getElementById('timeSlider'),
+        sliderTimeDisplay: document.getElementById('sliderTimeDisplay'),
+        selectedDurationDisplay: document.getElementById('selectedDurationDisplay'),
+        quickTagInput: document.getElementById('quickTagInput'),
+        backToSliderBtn: document.getElementById('backToSliderBtn'),
+        confirmQuickLogBtn: document.getElementById('confirmQuickLogBtn'),
+        timerDisplay: document.getElementById('timerDisplay'),
+        tagInput: document.getElementById('tagInput'),
+        tagSuggestions: document.getElementById('tagSuggestions'),
+        startBtn: document.getElementById('startBtn'),
+        stopBtn: document.getElementById('stopBtn'),
+        timeModal: document.getElementById('timeModal'),
+        minInput: document.getElementById('minInput'),
+        secInput: document.getElementById('secInput'),
+        timeModalCancel: document.getElementById('timeModalCancel'),
+        timeModalConfirm: document.getElementById('timeModalConfirm'),
+
+        // 页面2组件
+        donutChart: document.getElementById('donutChart'),
+        chartLegend: document.getElementById('chartLegend'),
+        chartCenterText: document.getElementById('chartCenterText'),
+        noInvestmentMsg: document.getElementById('noInvestmentMsg'),
+        weekInvested: document.getElementById('weekInvested'),
+        weekDebted: document.getElementById('weekDebted'),
+        weekNet: document.getElementById('weekNet'),
+        page2HistoryList: document.getElementById('page2HistoryList'),
+        noHistoryMsg: document.getElementById('noHistoryMsg'),
+
+        // 本周概览展开功能元素
+        weekInvestedBtn: document.getElementById('weekInvestedBtn'),
+        weekDebtedBtn: document.getElementById('weekDebtedBtn'),
+        weekNetBtn: document.getElementById('weekNetBtn'),
+        detailContainer: document.getElementById('detailContainer'),
+        detailTitle: document.getElementById('detailTitle'),
+        detailList: document.getElementById('detailList'),
+        detailCloseBtn: document.getElementById('detailCloseBtn'),
+
+        // 投资结束提示元素 (NEW)
+        completionModal: document.getElementById('completionModal'),
+        completionDetails: document.getElementById('completionDetails'),
+        completionConfirmBtn: document.getElementById('completionConfirmBtn'),
+        completionViewBtn: document.getElementById('completionViewBtn'),
+        notificationPrompt: document.getElementById('notificationPrompt'),
+        enableNotificationBtn: document.getElementById('enableNotificationBtn'),
+    };
+
+    // --- 核心逻辑 ---
+
+    function loadData() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            appData = JSON.parse(raw);
+        } else {
+            // 为演示添加一些初始数据
+            const today = new Date();
+            today.setHours(9, 0, 0, 0);
+            
+            appData.history = [
+                { type: 'invest', tag: '编码', minutes: 45, timestamp: today.getTime() },
+                { type: 'invest', tag: '学习', minutes: 30, timestamp: today.getTime() + 3600000 },
+                { type: 'debt', tag: '刷视频', minutes: 25, timestamp: today.getTime() + 7200000 },
+                { type: 'invest', tag: '会议', minutes: 60, timestamp: today.getTime() - 86400000 * 2 },
+                { type: 'debt', tag: '闲聊', minutes: 15, timestamp: today.getTime() - 86400000 },
+            ];
+            saveData();
+        }
+        render();
+    }
+
+    function saveData() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }
+
+    // --- 页面1渲染 ---
+    function renderPage1() {
+        const summary = getTodaySummary();
+        const netHours = (summary.net / 60).toFixed(1);
+        const investedHours = (summary.invested / 60).toFixed(1);
+        const debtedHours = (summary.debted / 60).toFixed(1);
+
+        els.netValue.textContent = `${netHours >= 0 ? '+' : ''}${netHours}h`;
+        els.netValue.className = `net-value ${netHours >= 0 ? 'positive' : 'negative'}`;
+        els.invested.textContent = investedHours + 'h';
+        els.debted.textContent = debtedHours + 'h';
+
+        if (netHours != 0) {
+            els.netValue.classList.remove('pulse');
+            void els.netValue.offsetWidth;
+            els.netValue.classList.add('pulse');
+        }
+    }
+
+    // --- 页面2渲染 (MODIFIED) ---
+    function renderPage2() {
+        // 1. 绘制圆环图 (今日投资分布)
+        const today = new Date().setHours(0, 0, 0, 0);
+        const todayInvestments = appData.history.filter(item => 
+            item.type === 'invest' && new Date(item.timestamp).setHours(0,0,0,0) === today
+        );
+
+        if (todayInvestments.length === 0) {
+            els.donutChart.style.background = '#f1f5f9';
+            els.chartLegend.innerHTML = '';
+            els.chartCenterText.innerHTML = '0h<br><small>投资总额</small>';
+            els.noInvestmentMsg.style.display = 'block';
+            els.donutChart.style.boxShadow = 'none';
+        } else {
+            els.noInvestmentMsg.style.display = 'none';
+            els.donutChart.style.boxShadow = 'var(--shadow)';
+            const tagSummary = {};
+            let totalMinutes = 0;
+            todayInvestments.forEach(item => {
+                if (!tagSummary[item.tag]) tagSummary[item.tag] = 0;
+                tagSummary[item.tag] += item.minutes;
+                totalMinutes += item.minutes;
+            });
+
+            let gradientString = 'conic-gradient(';
+            let currentAngle = 0;
+            const legendItems = [];
+            const tags = Object.keys(tagSummary);
+            
+            tags.forEach((tag, index) => {
+                const minutes = tagSummary[tag];
+                const percentage = (minutes / totalMinutes) * 100;
+                const angle = (percentage / 100) * 360;
+                const color = chartColors[index % chartColors.length];
+                gradientString += `${color} ${currentAngle}deg ${currentAngle + angle}deg, `;
+                legendItems.push(`
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: ${color};"></div>
+                        <span>${tag} (${(minutes/60).toFixed(1)}h)</span>
+                    </div>
+                `);
+                currentAngle += angle;
+            });
+
+            gradientString = gradientString.slice(0, -2) + ')';
+            els.donutChart.style.background = gradientString;
+            els.chartLegend.innerHTML = legendItems.join('');
+            els.chartCenterText.innerHTML = `${(totalMinutes / 60).toFixed(1)}h<br><small>投资总额</small>`;
+        }
+
+        // 2. 计算本周数据 (只计算一次，点击时再渲染详细记录)
+        renderWeekStats();
+        
+        // 3. 渲染今日历史列表
+        renderTodayHistory();
+    }
+
+    // --- 新增：渲染本周统计数据 ---
+    function renderWeekStats() {
+        const todayDate = new Date();
+        const currentDay = todayDate.getDay();
+        const distanceToMonday = (currentDay === 0 ? 6 : currentDay - 1);
+        const monday = new Date(todayDate);
+        monday.setDate(todayDate.getDate() - distanceToMonday);
+        monday.setHours(0,0,0,0);
+
+        let weekInvested = 0;
+        let weekDebted = 0;
+
+        appData.history.forEach(item => {
+            if (new Date(item.timestamp) >= monday) {
+                if (item.type === 'invest') weekInvested += item.minutes;
+                else weekDebted += item.minutes;
+            }
+        });
+
+        const weekNet = weekInvested - weekDebted;
+        els.weekInvested.textContent = (weekInvested / 60).toFixed(1) + 'h';
+        els.weekDebted.textContent = (weekDebted / 60).toFixed(1) + 'h';
+        els.weekNet.textContent = (weekNet / 60).toFixed(1) + 'h';
+        els.weekNet.style.color = weekNet >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
+
+    // --- 新增：渲染今日历史列表 ---
+    function renderTodayHistory() {
+        const today = new Date().setHours(0, 0, 0, 0);
+        const todayItems = appData.history.filter(item => 
+            new Date(item.timestamp).setHours(0,0,0,0) === today
+        );
+
+        els.page2HistoryList.innerHTML = '';
+        if (todayItems.length === 0) {
+            els.noHistoryMsg.style.display = 'block';
+        } else {
+            els.noHistoryMsg.style.display = 'none';
+            todayItems.reverse().forEach(item => {
+                const li = document.createElement('li');
+                li.className = `history-item ${item.type}`;
+                const valueText = item.type === 'invest' ? `+${(item.minutes/60).toFixed(1)}h` : `-${(item.minutes/60).toFixed(1)}h`;
+                const icon = item.type === 'invest' ? '🟢' : '🔴';
+                li.innerHTML = `
+                    <div class="item-meta">
+                        <span class="item-tag">${icon} ${item.type === 'invest' ? '投资' : '负债'} · ${item.tag}</span>
+                        <span class="item-time">${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    <div class="item-value" style="color:${item.type === 'invest' ? 'var(--success)' : 'var(--danger)'}">${valueText}</div>
+                `;
+                els.page2HistoryList.appendChild(li);
+            });
+        }
+    }
+
+    // --- 新增：渲染本周详细记录 ---
+    function renderWeekDetails(type) {
+        const todayDate = new Date();
+        const currentDay = todayDate.getDay();
+        const distanceToMonday = (currentDay === 0 ? 6 : currentDay - 1);
+        const monday = new Date(todayDate);
+        monday.setDate(todayDate.getDate() - distanceToMonday);
+        monday.setHours(0,0,0,0);
+
+        // 筛选本周记录
+        let filteredItems = appData.history.filter(item => 
+            new Date(item.timestamp) >= monday
+        );
+
+        // 根据类型进一步筛选
+        if (type === 'invest') {
+            filteredItems = filteredItems.filter(item => item.type === 'invest');
+            els.detailTitle.textContent = '本周投资详情';
+        } else if (type === 'debt') {
+            filteredItems = filteredItems.filter(item => item.type === 'debt');
+            els.detailTitle.textContent = '本周负债详情';
+        } else {
+            els.detailTitle.textContent = '本周全部记录';
+        }
+
+        // 排序：时间倒序
+        filteredItems.sort((a, b) => b.timestamp - a.timestamp);
+
+        // 渲染列表
+        if (filteredItems.length === 0) {
+            els.detailList.innerHTML = '<li class="detail-item" style="justify-content:center; color:var(--text-light);">本周暂无记录</li>';
+        } else {
+            els.detailList.innerHTML = filteredItems.map(item => {
+                const valueText = item.type === 'invest' ? `+${(item.minutes/60).toFixed(1)}h` : `-${(item.minutes/60).toFixed(1)}h`;
+                const date = new Date(item.timestamp);
+                const dateStr = `${date.getMonth()+1}/${date.getDate()}`;
+                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                return `
+                    <li class="detail-item ${item.type}">
+                        <div class="detail-item-info">
+                            <span class="detail-item-tag">${item.tag}</span>
+                            <span class="detail-item-time">${dateStr} ${timeStr}</span>
+                        </div>
+                        <span class="detail-item-value">${valueText}</span>
+                    </li>
+                `;
+            }).join('');
+        }
+    }
+
+    // --- 新增：展开/收起详细记录 ---
+    function toggleDetailContainer(type) {
+        const isExpanded = els.detailContainer.classList.contains('expanded');
+        const isActive = els.detailContainer.dataset.type === type;
+
+        // 如果已经展开且点击的是同一个类型，则收起
+        if (isExpanded && isActive) {
+            els.detailContainer.classList.remove('expanded');
+            document.querySelectorAll('.stat-item').forEach(item => item.classList.remove('active'));
+            els.detailContainer.dataset.type = '';
+            return;
+        }
+
+        // 渲染新内容
+        renderWeekDetails(type);
+        
+        // 展开容器
+        els.detailContainer.classList.add('expanded');
+        els.detailContainer.dataset.type = type;
+
+        // 更新按钮状态
+        document.querySelectorAll('.stat-item').forEach(item => item.classList.remove('active'));
+        if (type === 'invest') els.weekInvestedBtn.classList.add('active');
+        else if (type === 'debt') els.weekDebtedBtn.classList.add('active');
+        else els.weekNetBtn.classList.add('active');
+
+        // 滚动到容器位置（如果需要）
+        setTimeout(() => {
+            els.detailContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+    }
+
+    function render() {
+        renderPage1();
+    }
+
+    // --- 页面切换逻辑 ---
+    function switchPage(pageId) {
+        if (pageId === 'page1') {
+            els.page1.classList.add('active');
+            els.page2.classList.remove('active');
+            els.navPage1.classList.add('active');
+            els.navPage2.classList.remove('active');
+            renderPage1();
+        } else {
+            els.page1.classList.remove('active');
+            els.page2.classList.add('active');
+            els.navPage1.classList.remove('active');
+            els.navPage2.classList.add('active');
+            renderPage2();
+        }
+    }
+
+    els.navPage1.addEventListener('click', () => switchPage('page1'));
+    els.navPage2.addEventListener('click', () => switchPage('page2'));
+
+    // --- 本周概览点击事件 ---
+    els.weekInvestedBtn.addEventListener('click', () => toggleDetailContainer('invest'));
+    els.weekDebtedBtn.addEventListener('click', () => toggleDetailContainer('debt'));
+    els.weekNetBtn.addEventListener('click', () => toggleDetailContainer('all'));
+    els.detailCloseBtn.addEventListener('click', () => {
+        els.detailContainer.classList.remove('expanded');
+        document.querySelectorAll('.stat-item').forEach(item => item.classList.remove('active'));
+        els.detailContainer.dataset.type = '';
+    });
+
+    // --- 番茄钟逻辑 ---
+    function getTodaySummary() {
+        const today = new Date().setHours(0, 0, 0, 0);
+        let invested = 0, debted = 0;
+        for (let i = appData.history.length - 1; i >= 0; i--) {
+            const item = appData.history[i];
+            if (new Date(item.timestamp).setHours(0, 0, 0, 0) !== today) break;
+            if (item.type === 'invest') invested += item.minutes;
+            else debted += item.minutes;
+        }
+        return { invested, debted, net: invested - debted };
+    }
+
+    function updateTimerDisplay() {
+        const m = Math.floor(remainingSeconds / 60).toString().padStart(2, '0');
+        const s = (remainingSeconds % 60).toString().padStart(2, '0');
+        els.timerDisplay.textContent = `${m}:${s}`;
+    }
+
+    els.timerDisplay.addEventListener('click', () => {
+        if (isRunning) {
+            els.timerDisplay.classList.add('shake');
+            setTimeout(() => els.timerDisplay.classList.remove('shake'), 400);
+            return;
+        }
+        const currentM = Math.floor(remainingSeconds / 60);
+        const currentS = remainingSeconds % 60;
+        els.minInput.value = currentM;
+        els.secInput.value = currentS;
+        els.timeModal.style.display = 'flex';
+    });
+
+    els.timeModalConfirm.addEventListener('click', () => {
+        const minutes = parseInt(els.minInput.value) || 0;
+        const seconds = parseInt(els.secInput.value) || 0;
+        if (minutes === 0 && seconds === 0) { 
+            alert("时长不能为0秒！"); 
+            return; 
+        }
+        remainingSeconds = minutes * 60 + seconds;
+        updateTimerDisplay();
+        els.timeModal.style.display = 'none';
+    });
+
+    els.timeModalCancel.addEventListener('click', () => els.timeModal.style.display = 'none');
+
+    els.tagInput.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        if (value.length === 0) { els.tagSuggestions.style.display = 'none'; return; }
+        const matches = recommendedTags.filter(tag => tag.includes(value));
+        if (matches.length > 0) {
+            els.tagSuggestions.innerHTML = matches.map(tag => `<div class="suggestion-item">${tag}</div>`).join('');
+            els.tagSuggestions.style.display = 'block';
+        } else {
+            els.tagSuggestions.style.display = 'none';
+        }
+    });
+
+    els.tagSuggestions.addEventListener('click', (e) => {
+        if (e.target.classList.contains('suggestion-item')) {
+            els.tagInput.value = e.target.textContent;
+            els.tagSuggestions.style.display = 'none';
+            els.tagInput.focus();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!els.tagInput.contains(e.target) && !els.tagSuggestions.contains(e.target)) {
+            els.tagSuggestions.style.display = 'none';
+        }
+    });
+
+    function startTimer() {
+        const tag = els.tagInput.value.trim();
+        if (!tag) { 
+            els.tagInput.classList.add('shake');
+            setTimeout(() => els.tagInput.classList.remove('shake'), 400);
+            return; 
+        }
+        if (remainingSeconds <= 0) { 
+            alert('时长不能为0！'); 
+            return; 
+        }
+        if (isRunning) return;
+
+        isRunning = true;
+        els.tagInput.disabled = true;
+        els.timerDisplay.style.pointerEvents = 'none';
+        els.timerDisplay.style.color = '#94a3b8';
+        els.startBtn.style.display = 'none';
+        els.stopBtn.style.display = 'inline-block';
+        els.startBtn.disabled = true;
+        els.stopBtn.disabled = false;
+
+        timerInterval = setInterval(() => {
+            remainingSeconds--;
+            updateTimerDisplay();
+            if (remainingSeconds <= 0) {
+                stopTimerAndRecord();
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        isRunning = false;
+        els.tagInput.disabled = false;
+        els.timerDisplay.style.pointerEvents = 'auto';
+        els.timerDisplay.style.color = 'var(--primary)';
+        els.startBtn.style.display = 'inline-block';
+        els.stopBtn.style.display = 'none';
+        els.startBtn.disabled = false;
+        els.stopBtn.disabled = true;
+        updateTimerDisplay();
+    }
+
+    // --- 新增：播放提示音 ---
+    function playCompletionSound() {
+        // 使用Web Audio API创建简单的提示音（避免自动播放限制）
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+            oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+            oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (e) {
+            console.log('音频播放失败:', e);
+        }
+    }
+
+    // --- 新增：发送浏览器通知 ---
+    function sendNotification(tag, minutes) {
+        if (!('Notification' in window)) {
+            console.log('浏览器不支持通知');
+            return;
+        }
+
+        if (Notification.permission === 'granted') {
+            new Notification('🎉 时间投资完成！', {
+                body: `任务 "${tag}" 已完成，投资时长 ${minutes} 分钟`,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="80">⏱️</text></svg>',
+                tag: 'time-investment-complete'
+            });
+        } else if (Notification.permission !== 'denied') {
+            // 显示授权提示
+            els.notificationPrompt.style.display = 'block';
+        }
+    }
+
+    // --- 新增：标题闪烁 ---
+    function toggleTitleFlash(enable) {
+        if (enable) {
+            document.body.classList.add('title-flashing');
+            // 10秒后自动停止闪烁
+            setTimeout(() => {
+                document.body.classList.remove('title-flashing');
+            }, 10000);
+        } else {
+            document.body.classList.remove('title-flashing');
+        }
+    }
+
+    // --- 新增：显示投资结束提示 ---
+    function showCompletionModal(tag, minutes) {
+        const hours = (minutes / 60).toFixed(1);
+        els.completionDetails.innerHTML = `
+            <div>任务：<strong>${tag}</strong></div>
+            <div>时长：<strong>${minutes} 分钟 (${hours}h)</strong></div>
+            <div>时间：<strong>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</strong></div>
+        `;
+
+        els.completionModal.style.display = 'flex';
+        
+        // 播放提示音
+        playCompletionSound();
+
+        // 发送浏览器通知
+        sendNotification(tag, minutes);
+
+        // 标题闪烁
+        toggleTitleFlash(true);
+
+        // 3秒后自动关闭提示（如果用户未操作）
+        setTimeout(() => {
+            if (els.completionModal.style.display === 'flex') {
+                els.completionModal.style.display = 'none';
+                toggleTitleFlash(false);
+            }
+        }, 5000);
+    }
+
+    // --- 修改：停止并记录函数（添加提示） ---
+    function stopTimerAndRecord() {
+        clearInterval(timerInterval);
+        isRunning = false;
+
+        const tag = els.tagInput.value.trim();
+        const totalMinutes = Math.ceil((parseInt(els.minInput.value) * 60 + parseInt(els.secInput.value)) / 60);
+
+        appData.history.push({
+            type: 'invest',
+            tag: tag,
+            minutes: totalMinutes,
+            timestamp: Date.now()
+        });
+        saveData();
+        render();
+
+        // 显示结束提示
+        showCompletionModal(tag, totalMinutes);
+
+        // 重置UI
+        els.tagInput.disabled = false;
+        els.tagInput.value = '';
+        els.tagInput.placeholder = "输入任务标签 (自动推荐)";
+        els.timerDisplay.style.pointerEvents = 'auto';
+        els.timerDisplay.style.color = 'var(--primary)';
+        els.startBtn.style.display = 'inline-block';
+        els.stopBtn.style.display = 'none';
+        els.startBtn.disabled = false;
+        els.stopBtn.disabled = true;
+
+        // 重置时间
+        const minutes = parseInt(els.minInput.value) || 0;
+        const seconds = parseInt(els.secInput.value) || 0;
+        remainingSeconds = minutes * 60 + seconds;
+        updateTimerDisplay();
+
+        // 成功提示
+        els.timerDisplay.classList.add('pulse');
+        setTimeout(() => els.timerDisplay.classList.remove('pulse'), 500);
+    }
+
+    // --- 新增：提示模态框事件 ---
+    els.completionConfirmBtn.addEventListener('click', () => {
+        els.completionModal.style.display = 'none';
+        toggleTitleFlash(false);
+        els.notificationPrompt.style.display = 'none';
+    });
+
+    els.completionViewBtn.addEventListener('click', () => {
+        els.completionModal.style.display = 'none';
+        toggleTitleFlash(false);
+        els.notificationPrompt.style.display = 'none';
+        switchPage('page2');
+    });
+
+    els.enableNotificationBtn.addEventListener('click', () => {
+        if ('Notification' in window) {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    els.notificationPrompt.innerHTML = '<strong>✅ 通知已开启</strong><br>下次完成时将收到系统提醒';
+                    setTimeout(() => {
+                        els.notificationPrompt.style.display = 'none';
+                    }, 2000);
+                }
+            });
+        }
+    });
+
+    // --- 快速记录逻辑 ---
+    els.timeSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        els.sliderTimeDisplay.textContent = value.toFixed(2) + 'h';
+        if (value >= 2) {
+            els.sliderTimeDisplay.style.color = '#dc2626';
+        } else if (value >= 1) {
+            els.sliderTimeDisplay.style.color = '#ea580c';
+        } else {
+            els.sliderTimeDisplay.style.color = 'var(--danger)';
+        }
+    });
+
+    const endDrag = () => {
+        const value = parseFloat(els.timeSlider.value);
+        if (value > 0) {
+            quickLogDuration = value;
+            els.selectedDurationDisplay.textContent = value.toFixed(2) + 'h';
+            els.quickLogSection.classList.add('editing');
+            setTimeout(() => els.quickTagInput.focus(), 100);
+        }
+    };
+
+    els.timeSlider.addEventListener('mouseup', endDrag);
+    els.timeSlider.addEventListener('touchend', endDrag);
+
+    els.backToSliderBtn.addEventListener('click', () => {
+        els.quickLogSection.classList.remove('editing');
+        els.quickTagInput.value = '';
+    });
+
+    els.confirmQuickLogBtn.addEventListener('click', () => {
+        const tag = els.quickTagInput.value.trim();
+        if (!tag) { 
+            els.quickTagInput.classList.add('shake');
+            setTimeout(() => els.quickTagInput.classList.remove('shake'), 400);
+            return; 
+        }
+
+        appData.history.push({
+            type: 'debt',
+            tag: tag,
+            minutes: quickLogDuration * 60,
+            timestamp: Date.now()
+        });
+        saveData();
+        render();
+
+        // 重置UI
+        els.quickLogSection.classList.remove('editing');
+        els.timeSlider.value = 0.25;
+        els.sliderTimeDisplay.textContent = '0.25h';
+        els.sliderTimeDisplay.style.color = 'var(--danger)';
+        els.quickTagInput.value = '';
+        quickLogDuration = 0;
+
+        // 成功提示
+        els.selectedDurationDisplay.classList.add('pulse');
+        setTimeout(() => els.selectedDurationDisplay.classList.remove('pulse'), 500);
+    });
+
+    // --- 绑定按钮事件 ---
+    els.startBtn.addEventListener('click', startTimer);
+    els.stopBtn.addEventListener('click', stopTimer);
+
+    // --- 初始化 ---
+    loadData();
+    updateTimerDisplay();
+
+</script>
+</body>
+</html>
